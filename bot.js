@@ -1,6 +1,6 @@
 require('dotenv').config();
 const express = require('express');
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const { DateTime } = require('luxon');
 
 const TOKEN = process.env.TOKEN;
@@ -9,6 +9,9 @@ const PORT = process.env.PORT || 3000;
 
 const seedRoleMap = {
   carrot: '1397255905007112243',
+  // add other seeds and their role IDs here, e.g.:
+  // tomato: 'roleid123',
+  // lettuce: 'roleid456',
 };
 
 // --- Express Server Setup ---
@@ -78,18 +81,40 @@ async function checkSeedsAndPingRoles() {
       return;
     }
 
-    const carrotSeed = seeds.find(s => s.name.toLowerCase() === 'carrot');
-    if (!carrotSeed) {
-      console.log('ℹ️ Carrot seed not currently available, skipping ping.');
-      return;
+    // Build embed for seeds
+    const embed = new EmbedBuilder()
+      .setTitle('🌱 Available Seeds')
+      .setColor(0x00ff00)
+      .setTimestamp();
+
+    // Prepare mentions string
+    let mentionText = '';
+
+    for (const seed of seeds) {
+      const seedName = seed.name.toLowerCase();
+
+      embed.addFields({
+        name: seed.name,
+        value: seed.description || 'No description available',
+        inline: true,
+      });
+
+      const roleId = seedRoleMap[seedName];
+      if (roleId) {
+        const role = guild.roles.cache.get(roleId);
+        if (role) {
+          mentionText += `<@&${role.id}> `;
+        } else {
+          mentionText += `@ROLE_NOTFOUND(${seed.name}) `;
+        }
+      } else {
+        mentionText += `@ROLE_NOTFOUND(${seed.name}) `;
+      }
     }
 
-    const roleId = seedRoleMap.carrot;
-    const role = guild.roles.cache.get(roleId);
-    const mention = role ? `<@&${role.id}>` : '@NOTFOUND';
+    await channel.send({ content: mentionText.trim(), embeds: [embed] });
 
-    await channel.send(`🌱 Carrot seed is now available! ${mention}`);
-    console.log('✅ Sent carrot seed ping.');
+    console.log('✅ Sent seeds embed with role pings.');
   } catch (error) {
     console.error('❌ Error checking seeds:', error);
   }
@@ -97,6 +122,7 @@ async function checkSeedsAndPingRoles() {
 
 function scheduleSeedCheck() {
   const now = DateTime.now();
+  // Schedule next check on next 5 minute interval
   const nextCheck = now.plus({ minutes: 5 - (now.minute % 5) }).startOf('minute');
   const waitMs = nextCheck.diff(now).as('milliseconds');
 
