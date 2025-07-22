@@ -1,8 +1,20 @@
 require('dotenv').config();
+const express = require('express');
 const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, Events } = require('discord.js');
 
 const TOKEN = process.env.TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get('/', (req, res) => {
+  res.send('Bot is alive!');
+});
+
+app.listen(PORT, () => {
+  console.log(`🌐 Express server running on port ${PORT}`);
+});
 
 if (!TOKEN || !CLIENT_ID) {
   console.error('❌ Missing TOKEN or CLIENT_ID in .env file');
