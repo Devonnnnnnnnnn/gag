@@ -7,11 +7,35 @@ const TOKEN = process.env.TOKEN;
 const CHANNEL_ID = process.env.CHANNEL_ID;
 const PORT = process.env.PORT || 3000;
 
+// Map seed and gear names to their emojis and optionally role IDs
 const seedRoleMap = {
-  carrot: '1397255905007112243',
-  // add other seeds and their role IDs here, e.g.:
-  // tomato: 'roleid123',
-  // lettuce: 'roleid456',
+  carrot: '1397255905007112243', // example role ID
+  cactus: 'roleIdForCactus',
+  strawberry: 'roleIdForStrawberry',
+  'orange tulip': 'roleIdForOrangeTulip',
+  tomato: 'roleIdForTomato',
+  blueberry: 'roleIdForBlueberry',
+};
+
+const seedEmojiMap = {
+  carrot: '🥕',
+  cactus: '🌵',
+  strawberry: '🍓',
+  'orange tulip': '🌷',
+  tomato: '🍅',
+  blueberry: '🫐',
+};
+
+const gearEmojiMap = {
+  'cleaning spray': '🧴',
+  trowel: '🛠️',
+  'harvest tool': '🪓',
+  'basic sprinkler': '💧',
+  'recall wrench': '🔧',
+  'favorite tool': '❤️',
+  'watering can': '🪣',
+  'magnifying glass': '🔍',
+  'godly sprinkler': '🌱',
 };
 
 // --- Express Server Setup ---
@@ -46,14 +70,14 @@ async function fetchSeeds() {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to fetch GAGAPI: ${res.statusText}`);
   const json = await res.json();
-  return json.data.seed?.items || [];
+  return json.data || {};
 }
 
 async function checkSeedsAndPingRoles() {
   try {
-    const seeds = await fetchSeeds();
-    if (!seeds.length) {
-      console.log('⚠️ No seeds found in API response.');
+    const data = await fetchSeeds();
+    if (!data.seed?.items && !data.gear?.items) {
+      console.log('⚠️ No seeds or gear found in API response.');
       return;
     }
 
@@ -81,40 +105,53 @@ async function checkSeedsAndPingRoles() {
       return;
     }
 
-    // Build embed for seeds
+    // Separate seeds and gear
+    const seeds = data.seed?.items || [];
+    const gear = data.gear?.items || [];
+
+    // Build description for seeds and gear, formatted like the screenshot
+    let seedsText = '';
+    for (const seed of seeds) {
+      const name = seed.name.toLowerCase();
+      const emoji = seedEmojiMap[name] || '';
+      seedsText += `${emoji} ${seed.name} x${seed.quantity}\n`;
+    }
+
+    let gearText = '';
+    for (const g of gear) {
+      const name = g.name.toLowerCase();
+      const emoji = gearEmojiMap[name] || '';
+      gearText += `${emoji} ${g.name} x${g.quantity}\n`;
+    }
+
+    // Build embed
     const embed = new EmbedBuilder()
-      .setTitle('🌱 Available Seeds')
-      .setColor(0x00ff00)
+      .setTitle('🌱 Grow a Garden Stock')
+      .setColor(0x22bb33)
+      .addFields(
+        { name: 'SEEDS STOCK', value: seedsText || 'No seeds available', inline: false },
+        { name: 'GEAR STOCK', value: gearText || 'No gear available', inline: false },
+      )
       .setTimestamp();
 
-    // Prepare mentions string
+    // Prepare mention text for roles (optional)
     let mentionText = '';
-
     for (const seed of seeds) {
       const seedName = seed.name.toLowerCase();
-
-      embed.addFields({
-        name: seed.name,
-        value: seed.description || 'No description available',
-        inline: true,
-      });
-
       const roleId = seedRoleMap[seedName];
       if (roleId) {
         const role = guild.roles.cache.get(roleId);
-        if (role) {
-          mentionText += `<@&${role.id}> `;
-        } else {
-          mentionText += `@ROLE_NOTFOUND(${seed.name}) `;
-        }
+        if (role) mentionText += `<@&${role.id}> `;
+        else mentionText += `@ROLE_NOTFOUND(${seed.name}) `;
       } else {
         mentionText += `@ROLE_NOTFOUND(${seed.name}) `;
       }
     }
 
+    // Send message with embed and role mentions
     await channel.send({ content: mentionText.trim(), embeds: [embed] });
 
-    console.log('✅ Sent seeds embed with role pings.');
+    console.log('✅ Sent seeds and gear embed with role pings.');
   } catch (error) {
     console.error('❌ Error checking seeds:', error);
   }
