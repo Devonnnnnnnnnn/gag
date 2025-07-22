@@ -4,6 +4,11 @@ const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, Events } =
 const TOKEN = process.env.TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 
+if (!TOKEN || !CLIENT_ID) {
+  console.error('❌ Missing TOKEN or CLIENT_ID in .env file');
+  process.exit(1);
+}
+
 const commands = [
   new SlashCommandBuilder()
     .setName('ping')
@@ -20,7 +25,7 @@ client.once('ready', async () => {
   const guild = client.guilds.cache.first();
 
   if (!guild) {
-    console.log('❌ Bot is not in any guilds!');
+    console.error('❌ Bot is not in any guilds!');
     return;
   }
 
@@ -45,6 +50,7 @@ client.on(Events.InteractionCreate, async interaction => {
   if (interaction.commandName === 'ping') {
     const apiLatency = Math.round(client.ws.ping);
     const msgLatency = Date.now() - interaction.createdTimestamp;
+
     await interaction.reply(`🏓 Pong!\nAPI Latency: ${apiLatency}ms\nMessage Latency: ${msgLatency}ms`);
   }
 });
