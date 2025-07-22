@@ -1,15 +1,28 @@
 require('dotenv').config();
+const express = require('express');
 const { Client, GatewayIntentBits } = require('discord.js');
 const { DateTime } = require('luxon');
 
 const TOKEN = process.env.TOKEN;
 const CHANNEL_ID = process.env.CHANNEL_ID;
+const PORT = process.env.PORT || 3000;
 
-// Map seed names to role IDs
 const seedRoleMap = {
   carrot: '1397255905007112243',
 };
 
+// --- Express Server Setup ---
+const app = express();
+
+app.get('/', (req, res) => {
+  res.send('Bot is alive!');
+});
+
+app.listen(PORT, () => {
+  console.log(`🌐 Express server running on port ${PORT}`);
+});
+
+// --- Discord Bot Setup ---
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -47,7 +60,6 @@ async function checkSeedsAndPingRoles() {
       return;
     }
 
-    // Find guild containing the target channel
     let guild;
     for (const g of guilds.values()) {
       if (g.channels.cache.has(CHANNEL_ID)) {
@@ -66,14 +78,12 @@ async function checkSeedsAndPingRoles() {
       return;
     }
 
-    // Look for carrot seed
     const carrotSeed = seeds.find(s => s.name.toLowerCase() === 'carrot');
     if (!carrotSeed) {
       console.log('ℹ️ Carrot seed not currently available, skipping ping.');
       return;
     }
 
-    // Check role and prepare mention
     const roleId = seedRoleMap.carrot;
     const role = guild.roles.cache.get(roleId);
     const mention = role ? `<@&${role.id}>` : '@NOTFOUND';
@@ -87,7 +97,6 @@ async function checkSeedsAndPingRoles() {
 
 function scheduleSeedCheck() {
   const now = DateTime.now();
-  // Next time at the next multiple of 5 minutes (e.g. 12:10, 12:15, 12:20, etc)
   const nextCheck = now.plus({ minutes: 5 - (now.minute % 5) }).startOf('minute');
   const waitMs = nextCheck.diff(now).as('milliseconds');
 
