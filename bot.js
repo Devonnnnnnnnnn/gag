@@ -63,7 +63,7 @@ client.once('ready', () => {
   scheduleSeedCheck();
 });
 
-client.login(TOKEN);
+client.login(TOKN);
 
 async function fetchSeeds() {
   const url = 'https://gagstock.gleeze.com/grow-a-garden';
