@@ -2,19 +2,11 @@ require('dotenv').config();
 const express = require('express');
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const { DateTime } = require('luxon');
-const fetch = require('node-fetch'); // Install: npm i node-fetch@2
+const fetch = require('node-fetch'); // npm i node-fetch@2
 
 const TOKEN = process.env.TOKEN;
 const CHANNEL_ID = process.env.CHANNEL_ID;
 const PORT = process.env.PORT || 3000;
-
-// Map of custom emojis for seeds
-const customEmojiMap = {
-  carrot: '<:carrot:1>',
-  // Add more custom emojis here as needed:
-  // tomato: '<:tomato:1234567890>',
-  // strawberry: '<:strawberry:9876543210>',
-};
 
 const gearEmojiMap = {
   'cleaning spray': '🧴',
@@ -28,13 +20,9 @@ const gearEmojiMap = {
   'godly sprinkler': '🌱',
 };
 
-// --- Express Server Setup ---
+// --- Express Server ---
 const app = express();
-
-app.get('/', (req, res) => {
-  res.send('Bot is alive!');
-});
-
+app.get('/', (req, res) => res.send('Bot is alive!'));
 app.listen(PORT, () => {
   console.log(`🌐 Express server running on port ${PORT}`);
 });
@@ -55,6 +43,7 @@ client.once('ready', () => {
 
 client.login(TOKEN);
 
+// --- Seed API Fetch ---
 async function fetchSeeds() {
   const url = 'https://gagstock.gleeze.com/grow-a-garden';
   const res = await fetch(url);
@@ -63,6 +52,7 @@ async function fetchSeeds() {
   return json.data || {};
 }
 
+// --- Main Seed Check + Embed Logic ---
 async function checkSeedsAndPingRoles() {
   try {
     const data = await fetchSeeds();
@@ -71,22 +61,10 @@ async function checkSeedsAndPingRoles() {
       return;
     }
 
-    const guilds = client.guilds.cache;
-    if (guilds.size === 0) {
-      console.error('❌ Bot is not in any guilds.');
-      return;
-    }
-
-    let guild;
-    for (const g of guilds.values()) {
-      if (g.channels.cache.has(CHANNEL_ID)) {
-        guild = g;
-        break;
-      }
-    }
-
+    // Find first available guild
+    const guild = client.guilds.cache.first();
     if (!guild) {
-      console.error('❌ No guild found with the specified channel ID.');
+      console.error('❌ Bot is not in any guilds.');
       return;
     }
 
@@ -99,16 +77,18 @@ async function checkSeedsAndPingRoles() {
     const seeds = data.seed?.items || [];
     const gear = data.gear?.items || [];
 
-    const seedFields = seeds.map(seed => {
-      const nameKey = seed.name.toLowerCase();
-      const emoji = customEmojiMap[nameKey] || '';
+    // Dynamic emoji lookup from guild
+    const seedFields = await Promise.all(seeds.map(async (seed) => {
+      const emojiName = seed.name.toLowerCase().replace(/\s+/g, '_');
+      const emoji = guild.emojis.cache.find(e => e.name.toLowerCase() === emojiName);
       return {
-        name: `${emoji} ${seed.name} x${seed.quantity}`,
+        name: `${emoji ? `${emoji} ` : ''}${seed.name} x${seed.quantity}`,
         value: '\u200B',
         inline: true,
       };
-    });
+    }));
 
+    // Gear emoji with static map
     let gearText = '';
     for (const g of gear) {
       const name = g.name.toLowerCase();
@@ -133,6 +113,7 @@ async function checkSeedsAndPingRoles() {
   }
 }
 
+// --- Seed Check Scheduler ---
 function scheduleSeedCheck() {
   const now = DateTime.now();
   const nextCheck = now.plus({ minutes: 5 - (now.minute % 5) }).startOf('minute');
