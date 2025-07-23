@@ -2,37 +2,18 @@ require('dotenv').config();
 const express = require('express');
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const { DateTime } = require('luxon');
-const fetch = require('node-fetch'); // if you don’t have it, install: npm i node-fetch@2
+const fetch = require('node-fetch'); // Install: npm i node-fetch@2
 
 const TOKEN = process.env.TOKEN;
 const CHANNEL_ID = process.env.CHANNEL_ID;
 const PORT = process.env.PORT || 3000;
 
-const seedImageMap = {
-  carrot: 'https://static.wikia.nocookie.net/growagarden/images/5/59/CarrotProduce.png',
-  cactus: 'https://static.wikia.nocookie.net/growagarden/images/1/19/CactusProduceIcon.png/revision/latest/scale-to-width-down/268?cb=20250708022108',
-  strawberry: 'https://static.wikia.nocookie.net/growagarden/images/6/6d/Strawberry.png/revision/latest/scale-to-width-down/268?cb=20250501001831',
-  'orange tulip': 'https://static.wikia.nocookie.net/growagarden/images/4/4d/Orangetulip.png/revision/latest/scale-to-width-down/268?cb=20250422131408',
-  tomato: 'https://static.wikia.nocookie.net/growagarden/images/9/9d/Tomato.png/revision/latest/scale-to-width-down/268?cb=20250501001240',
-  blueberry: 'https://static.wikia.nocookie.net/growagarden/images/9/9e/Blueberry.png/revision/latest/scale-to-width-down/268?cb=20250504064726',
-  corn: 'https://static.wikia.nocookie.net/growagarden/images/e/ee/CornCropsPic.png/revision/latest?cb=20250716123712',
-  daffodil: 'https://static.wikia.nocookie.net/growagarden/images/3/31/Daffodilfruiticon.png/revision/latest/scale-to-width-down/267?cb=20250422223149',
-  watermelon: 'https://static.wikia.nocookie.net/growagarden/images/3/31/Watermelonfruiticon.png/revision/latest/scale-to-width-down/267?cb=20250422203923',
-  pumpkin: 'https://static.wikia.nocookie.net/growagarden/images/8/8b/Pumpkin_produce.png/revision/latest/scale-to-width-down/268?cb=20250708015448',
-  apple: 'https://static.wikia.nocookie.net/growagarden/images/c/c3/Applefruiticon.png/revision/latest/scale-to-width-down/267?cb=20250423014534',
-  bamboo: 'https://static.wikia.nocookie.net/growagarden/images/8/88/Bamboofruiticon.png/revision/latest?cb=20250422225330',
-  coconut: 'https://static.wikia.nocookie.net/growagarden/images/4/46/Coconutfruiticon.png/revision/latest?cb=20250421045107',
-  dragonfruit: 'https://static.wikia.nocookie.net/growagarden/images/f/f0/Dragon_Fruit_Produce.png/revision/latest/scale-to-width-down/268?cb=20250708022814',
-  mango: 'https://static.wikia.nocookie.net/growagarden/images/8/81/Mango_produce.png/revision/latest/scale-to-width-down/267?cb=20250708014006',
-  grape: 'https://static.wikia.nocookie.net/growagarden/images/9/98/Grape_Produce.png/revision/latest?cb=20250708020531',
-  mushroom: 'https://static.wikia.nocookie.net/growagarden/images/3/3a/MushroomCropsPic.png/revision/latest/scale-to-width-down/268?cb=20250430134436',
-  pepper: 'https://static.wikia.nocookie.net/growagarden/images/2/29/PepperCropsPic.png/revision/latest/scale-to-width-down/268?cb=20250503163931',
-  cacao: 'https://static.wikia.nocookie.net/growagarden/images/f/f2/CacaoIcon.png/revision/latest/scale-to-width-down/268?cb=20250511025646',
-  beanstalk: 'https://static.wikia.nocookie.net/growagarden/images/f/f9/BeanstalkIcon.png/revision/latest/scale-to-width-down/268?cb=20250711192652',
-  emberlily: 'https://static.wikia.nocookie.net/growagarden/images/7/72/Ember_Lily_Produce.png/revision/latest?cb=20250711192911',
-  sugarapple: 'https://static.wikia.nocookie.net/growagarden/images/a/a7/SugarAppleIcon.png/revision/latest/scale-to-width-down/268?cb=20250711193019',
-  burningbud: 'https://static.wikia.nocookie.net/growagarden/images/2/27/Burning_Bud_Product.PNG/revision/latest/scale-to-width-down/268?cb=20250709003332',
-  giantpinecone: 'https://static.wikia.nocookie.net/growagarden/images/e/e9/Giant_pinecone.png/revision/latest?cb=20250716123453',
+// Map of custom emojis for seeds
+const customEmojiMap = {
+  carrot: '<:carrot:1>',
+  // Add more custom emojis here as needed:
+  // tomato: '<:tomato:1234567890>',
+  // strawberry: '<:strawberry:9876543210>',
 };
 
 const gearEmojiMap = {
@@ -103,6 +84,7 @@ async function checkSeedsAndPingRoles() {
         break;
       }
     }
+
     if (!guild) {
       console.error('❌ No guild found with the specified channel ID.');
       return;
@@ -117,23 +99,16 @@ async function checkSeedsAndPingRoles() {
     const seeds = data.seed?.items || [];
     const gear = data.gear?.items || [];
 
-    // Build fields with seed images and quantity
     const seedFields = seeds.map(seed => {
       const nameKey = seed.name.toLowerCase();
-      const imageUrl = seedImageMap[nameKey] || null;
-      // Use markdown to put image as "emoji" by linking a tiny invisible char with the image as name
-      // Since Discord doesn't support images inline in text, we will display the image as a thumbnail for the whole embed or in field name with a markdown link
-      // Here we just put the seed name and quantity, and will set the embed thumbnail to the first seed image as an example
-
-      // To visually show images for each seed, we'll use the field name with the image URL in parentheses (not clickable image though)
+      const emoji = customEmojiMap[nameKey] || '';
       return {
-        name: `${seed.name} x${seed.quantity}`,
-        value: imageUrl ? `[‎](${imageUrl})` : 'No image',
+        name: `${emoji} ${seed.name} x${seed.quantity}`,
+        value: '\u200B',
         inline: true,
       };
     });
 
-    // Gear text - keep emoji for simplicity
     let gearText = '';
     for (const g of gear) {
       const name = g.name.toLowerCase();
@@ -141,23 +116,15 @@ async function checkSeedsAndPingRoles() {
       gearText += `${emoji} ${g.name} x${g.quantity}\n`;
     }
 
-    // Embed creation
     const embed = new EmbedBuilder()
       .setTitle('🌱 Grow a Garden Stock')
       .setColor(0x22bb33)
       .addFields(
-        { name: 'SEEDS STOCK', value: '\u200B', inline: false }, // Empty line for spacing
+        { name: 'SEEDS STOCK', value: '\u200B', inline: false },
         ...seedFields,
         { name: 'GEAR STOCK', value: gearText || 'No gear available', inline: false }
       )
       .setTimestamp();
-
-    // Set thumbnail to first seed image if available
-    if (seeds.length > 0) {
-      const firstSeedName = seeds[0].name.toLowerCase();
-      const thumbUrl = seedImageMap[firstSeedName];
-      if (thumbUrl) embed.setThumbnail(thumbUrl);
-    }
 
     await channel.send({ embeds: [embed] });
     console.log('✅ Sent seeds and gear embed.');
