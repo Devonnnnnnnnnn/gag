@@ -76,16 +76,18 @@ async function checkSeedsAndPingRoles() {
     const seeds = data.seed?.items || [];
     const gear = data.gear?.items || [];
 
-    // Dynamic emoji lookup from guild
-    const seedFields = await Promise.all(seeds.map(async (seed) => {
+    // Prepare seed list as a single field with line breaks
+    const seedLines = seeds.map(seed => {
       const emojiName = seed.name.toLowerCase().replace(/\s+/g, '_');
       const emoji = guild.emojis.cache.find(e => e.name.toLowerCase() === emojiName);
-      return {
-        name: `${emoji ? `${emoji} ` : ''}${seed.name} x${seed.quantity}`,
-        value: '\u200B',
-        inline: true,
-      };
-    }));
+      return `${emoji ? `${emoji} ` : ''}${seed.name} x${seed.quantity}`;
+    });
+
+    const seedField = {
+      name: 'SEEDS STOCK',
+      value: seedLines.join('\n') || 'No seeds available',
+      inline: false,
+    };
 
     // Gear emoji with static map
     let gearText = '';
@@ -99,8 +101,7 @@ async function checkSeedsAndPingRoles() {
       .setTitle('🌱 Grow a Garden Stock')
       .setColor(0x22bb33)
       .addFields(
-        { name: 'SEEDS STOCK', value: '\u200B', inline: false },
-        ...seedFields,
+        seedField,
         { name: 'GEAR STOCK', value: gearText || 'No gear available', inline: false }
       )
       .setTimestamp();
