@@ -135,18 +135,23 @@ async function checkSeedsAndPingRoles() {
       .setTimestamp();
 
     // Prepare mention text for roles (optional)
-    let mentionText = '';
-    for (const seed of seeds) {
-      const seedName = seed.name.toLowerCase();
-      const roleId = seedRoleMap[seedName];
-      if (roleId) {
-        const role = guild.roles.cache.get(roleId);
-        if (role) mentionText += `<@&${role.id}> `;
-        else mentionText += `@ROLE_NOTFOUND(${seed.name}) `;
-      } else {
-        mentionText += `@ROLE_NOTFOUND(${seed.name}) `;
-      }
-    }
+   const excludedSeeds = ['carrot', 'strawberry', 'blueberry', 'tomato'];
+
+let mentionText = '';
+for (const seed of seeds) {
+  const seedName = seed.name.toLowerCase();
+
+  if (excludedSeeds.includes(seedName)) continue; // Skip pinging excluded seeds
+
+  const roleId = seedRoleMap[seedName];
+  if (roleId) {
+    const role = guild.roles.cache.get(roleId);
+    if (role) mentionText += `<@&${role.id}> `;
+    else mentionText += `@ROLE_NOTFOUND(${seed.name}) `;
+  } else {
+    mentionText += `@ROLE_NOTFOUND(${seed.name}) `;
+  }
+}
 
     // Send message with embed and role mentions
     await channel.send({ content: mentionText.trim(), embeds: [embed] });
