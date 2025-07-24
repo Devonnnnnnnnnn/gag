@@ -210,14 +210,16 @@ client.on('messageCreate', async message => {
       lines.push(paddedRow.join(''));
     }
 
-    const embed = new EmbedBuilder()
-      .setTitle('🌱 Grow a Garden Reaction Roles')
-      .setDescription('React to this message to get/remove the corresponding role!\n\nReact again to remove the role.')
-      .setColor(0x22bb33)
-      .addFields({ name: 'Roles', value: '```\n' + lines.join('\n') + '\n```' })
-      .setTimestamp();
+    const textMessage = `🌱 Grow a Garden Reaction Roles
 
-    const sentMessage = await message.channel.send({ embeds: [embed] });
+React to this message to get/remove the corresponding role!
+
+\`\`\`
+${lines.join('\n')}
+\`\`\`
+`;
+
+    const sentMessage = await message.channel.send(textMessage);
 
     // Emojis for each role (adjust emojis to fit your roles)
     const roleEmojis = [
@@ -280,48 +282,3 @@ client.on('messageCreate', async message => {
     });
   }
 });
-
-// --- !listemojis command from your original code ---
-client.on('messageCreate', async (message) => {
-  if (message.author.bot) return;
-  if (!message.guild) return;
-
-  if (!message.content.startsWith(PREFIX)) return;
-  const [command] = message.content.trim().split(/\s+/);
-
-  if (command === `${PREFIX}listemojis`) {
-    const emojis = message.guild.emojis.cache;
-
-    if (emojis.size === 0) {
-      return message.channel.send('❌ No custom emojis found in this server.');
-    }
-
-    const emojiLines = emojis.map(emoji => {
-      const formatted = `<${emoji.animated ? 'a' : ''}:${emoji.name}:${emoji.id}>`;
-      const type = emoji.animated ? 'Animated' : 'Static';
-      return `• ${emoji.name} → ${formatted} (ID: \`${emoji.id}\`, ${type})`;
-    });
-
-    // Split into chunks for Discord message limit (1900 chars)
-    const chunks = chunkByCharacterLimit(emojiLines, 1900);
-
-    for (const chunk of chunks) {
-      await message.channel.send(`📙 **Custom Emojis:**\n${chunk}`);
-    }
-  }
-});
-
-// Helper to chunk long messages
-function chunkByCharacterLimit(lines, maxChars = 1900) {
-  const chunks = [];
-  let currentChunk = '';
-  for (const line of lines) {
-    if ((currentChunk + line + '\n').length > maxChars) {
-      chunks.push(currentChunk);
-      currentChunk = '';
-    }
-    currentChunk += line + '\n';
-  }
-  if (currentChunk) chunks.push(currentChunk);
-  return chunks;
-}
