@@ -88,12 +88,12 @@ async function checkSeedsAndPingRoles() {
 
     // Prepare gear text with emojis
     let gearText = '';
-    for (const g of gear) {
-      const name = g.name.toLowerCase();
-      const emoji = guild.emojis.cache.find(e => e.name.toLowerCase() === name);
-      gearText += `${emoji ? `<:${emoji.name}:${emoji.id}>` : ''} ${g.name} x${g.quantity}\n`;
-    }
-
+for (const g of gear) {
+  const emojiName = g.name.toLowerCase().replace(/\s+/g, '_');
+  const emoji = guild.emojis.cache.find(e => e.name.toLowerCase() === emojiName);
+  gearText += `${emoji ? `<:${emoji.name}:${emoji.id}>` : ''} ${g.name} x${g.quantity}\n`;
+}
+    
     // Determine which seeds and gear to ping (exclude always present)
     const pingSeeds = seeds.filter(seed => !excludedSeeds.includes(seed.name.toLowerCase()));
     const pingGear = gear.filter(g => !excludedGear.includes(g.name.toLowerCase()));
