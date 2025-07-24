@@ -3,12 +3,27 @@ const express = require('express');
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const { DateTime } = require('luxon');
 
-// === ENV ===
 const TOKEN = process.env.TOKEN;
 const CHANNEL_ID = process.env.CHANNEL_ID;
 const PORT = process.env.PORT || 3000;
 
-// === Gear Emoji Map ===
+// Map item names (lowercase) to their corresponding role IDs (replace with your actual role IDs)
+const ITEM_ROLE_IDS = {
+  // Seeds (example)
+  'orange tulip': '1397255905007112243',
+  'tomato': 'ROLE_ID_TOMATO',
+  'corn': 'ROLE_ID_CORN',
+  // Gears (example)
+  'basic sprinkler': 'ROLE_ID_BASIC_SPRINKLER',
+  'godly sprinkler': 'ROLE_ID_GODLY_SPRINKLER',
+  'magnifying glass': 'ROLE_ID_MAGNIFYING_GLASS',
+  // Add all relevant items here
+};
+
+// Items to exclude from ping (always in shop, so no ping)
+const excludedSeeds = ['carrot', 'blueberry', 'strawberry', 'tomato'];
+const excludedGear = ['watering can', 'recall wrench', 'trowel', 'cleaning spray', 'favorite tool', 'harvest tool'];
+
 const gearEmojiMap = {
   'cleaning spray': '🧴',
   trowel: '🛠️',
@@ -21,17 +36,14 @@ const gearEmojiMap = {
   'godly sprinkler': '🌱',
 };
 
-// === Sleep Utility ===
-const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-
-// === Express Server ===
+// --- Express Server ---
 const app = express();
 app.get('/', (req, res) => res.send('Bot is alive!'));
 app.listen(PORT, () => {
   console.log(`🌐 Express server running on port ${PORT}`);
 });
 
-// === Discord Client Setup ===
+// --- Discord Bot Setup ---
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -47,7 +59,7 @@ client.once('ready', () => {
 
 client.login(TOKEN);
 
-// === Fetch Seed Data ===
+// --- Seed API Fetch ---
 async function fetchSeeds() {
   const url = 'https://gagstock.gleeze.com/grow-a-garden';
   const res = await fetch(url);
@@ -56,12 +68,9 @@ async function fetchSeeds() {
   return json.data || {};
 }
 
-// === Main Logic ===
+// --- Main Seed Check + Embed Logic ---
 async function checkSeedsAndPingRoles() {
   try {
-    console.log('⏳ Waiting 5 seconds before fetching seeds...');
-    await sleep(5000); // <<–– DELAY HERE
-
     const data = await fetchSeeds();
     if (!data.seed?.items && !data.gear?.items) {
       console.log('⚠️ No seeds or gear found in API response.');
@@ -83,42 +92,71 @@ async function checkSeedsAndPingRoles() {
     const seeds = data.seed?.items || [];
     const gear = data.gear?.items || [];
 
+    // Prepare seed list for embed
     const seedLines = seeds.map(seed => {
       const emojiName = seed.name.toLowerCase().replace(/\s+/g, '_');
       const emoji = guild.emojis.cache.find(e => e.name.toLowerCase() === emojiName);
       return `${emoji ? `${emoji} ` : ''}${seed.name} x${seed.quantity}`;
     });
 
-    const seedField = {
-      name: 'SEEDS STOCK',
-      value: seedLines.join('\n') || 'No seeds available',
-      inline: false,
-    };
+    // Prepare gear list with emoji map fallback
+    let gearText = '';
+    for (const g of gear) {
+      const name = g.name.toLowerCase();
+      const emoji = guild.emojis.cache.find(e => e.name.toLowerCase() === name) || gearEmojiMap[name] || '';
+      gearText += `${emoji} ${g.name} x${g.quantity}\n`;
+    }
 
-let gearText = '';
-for (const g of gear) {
-  const emojiName = g.name.toLowerCase().replace(/\s+/g, '_'); // turn "Watering Can" into "watering_can"
-  const emoji = guild.emojis.cache.find(e => e.name.toLowerCase() === emojiName);
-  gearText += `${emoji ? `${emoji} ` : ''}${g.name} x${g.quantity}\n`;
-} 
-    
+    // Determine which seeds and gear to ping (exclude always present)
+    const pingSeeds = seeds.filter(seed => !excludedSeeds.includes(seed.name.toLowerCase()));
+    const pingGear = gear.filter(g => !excludedGear.includes(g.name.toLowerCase()));
+
+    // Collect role IDs for current stock items (avoid duplicates)
+    const rolesToPingSet = new Set();
+
+    for (const seed of pingSeeds) {
+      const roleId = ITEM_ROLE_IDS[seed.name.toLowerCase()];
+      if (roleId) rolesToPingSet.add(roleId);
+    }
+
+    for (const g of pingGear) {
+      const roleId = ITEM_ROLE_IDS[g.name.toLowerCase()];
+      if (roleId) rolesToPingSet.add(roleId);
+    }
+
+    const rolesToPing = Array.from(rolesToPingSet);
+
+    // Validate roles and check if mentionable
+    const validRoles = rolesToPing
+      .map(id => guild.roles.cache.get(id))
+      .filter(role => role && role.mentionable);
+
+    const pingString = validRoles.length > 0
+      ? validRoles.map(role => `<@&${role.id}>`).join(' ')
+      : '';
+
     const embed = new EmbedBuilder()
       .setTitle('🌱 Grow a Garden Stock')
       .setColor(0x22bb33)
       .addFields(
-        seedField,
+        { name: 'SEEDS STOCK', value: seedLines.join('\n') || 'No seeds available', inline: false },
         { name: 'GEAR STOCK', value: gearText || 'No gear available', inline: false }
       )
       .setTimestamp();
 
-    await channel.send({ embeds: [embed] });
-    console.log('✅ Sent seeds and gear embed.');
+    if (pingString) {
+      await channel.send({ content: pingString, embeds: [embed] });
+    } else {
+      await channel.send({ embeds: [embed] });
+    }
+
+    console.log(`✅ Sent embed${pingString ? ' with pings.' : '.'}`);
   } catch (error) {
-    console.error('❌ Error checking seeds:', error.message, error.stack);
+    console.error('❌ Error checking seeds:', error);
   }
 }
 
-// === Schedule Seed Check ===
+// --- Seed Check Scheduler ---
 function scheduleSeedCheck() {
   const now = DateTime.now();
   const nextCheck = now.plus({ minutes: 5 - (now.minute % 5) }).startOf('minute');
