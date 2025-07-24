@@ -36,11 +36,26 @@ const ITEM_ROLE_IDS = {
   'sugar apple': '1397903125943291934',
   'burning bud': '1397902752306167809',
   'giant pinecone': '1397905644027248742',
-  'extra1': 'ROLE_ID1',
-  'extra2': 'ROLE_ID2',
-  'extra3': 'ROLE_ID3',
-  'extra4': 'ROLE_ID4',
+
+  // New Gear Shop items (keys only, placeholder role IDs)
+  'watering can': '1397913821846175864',
+  'trowel': '1397914064306442320',
+  'recall wrench': '1397914193474359306',
+  'basic sprinkler': '1397914304728273049',
+  'advanced sprinkler': '1397914427873034382',
+  'medium toy': '1397914725999841392',
+  'medium treat': '1397914731922325545',
+  'godly sprinkler': '1397914588636250152',
+  'magnifying glass': '1397915215827308574',
+  'tanning mirror': '1397915712760057906',
+  'master sprinkler': '1397915857769730058',
+  'cleaning spray': '1397915979522117713',
+  'favorite tool': '1397916270493569124',
+  'harvest tool': '1397916329583050783',
+  'friendship pot': '1397916575524192358',
+  'level up lollipop': '1397916660870156328',
 };
+
 
 const excludedSeeds = ['carrot', 'blueberry', 'strawberry', 'tomato'];
 const excludedGear = ['watering can', 'recall wrench', 'trowel', 'cleaning spray', 'favorite tool', 'harvest tool'];
@@ -177,108 +192,3 @@ function scheduleSeedCheck() {
     scheduleSeedCheck();
   }, waitMs);
 }
-
-// --- !reactionroles command + reaction role handling ---
-client.on('messageCreate', async message => {
-  if (message.author.bot) return;
-  if (!message.guild) return;
-  if (!message.content.startsWith(PREFIX)) return;
-
-  const [command] = message.content.trim().split(/\s+/);
-
-  if (command === `${PREFIX}reactionroles`) {
-    if (!adminIDs.includes(message.author.id)) {
-      return message.reply('❌ You do not have permission to use this command.');
-    }
-
-    const guild = message.guild;
-    const roles = Object.entries(ITEM_ROLE_IDS);
-
-    // Prepare role names
-    const roleNames = roles.map(([itemName, roleId]) => {
-      const role = guild.roles.cache.get(roleId);
-      return role ? role.name : 'Unknown Role';
-    });
-
-    // Format into 4 columns inside a code block with padding
-    const columns = 4;
-    const padLength = 20;
-    const lines = [];
-    for (let i = 0; i < roleNames.length; i += columns) {
-      const row = roleNames.slice(i, i + columns);
-      const paddedRow = row.map(name => name.padEnd(padLength, ' '));
-      lines.push(paddedRow.join(''));
-    }
-
-    const textMessage = `🌱 Grow a Garden Reaction Roles
-
-React to this message to get/remove the corresponding role!
-
-\`\`\`
-${lines.join('\n')}
-\`\`\`
-`;
-
-    const sentMessage = await message.channel.send(textMessage);
-
-    // Emojis for each role (adjust emojis to fit your roles)
-    const roleEmojis = [
-      '🌷', '🌽', '💐', '🍉',
-      '🎃', '🍎', '🎍', '🥥',
-      '🌵', '🍈', '🥭', '🍇',
-      '🍄', '🌶️', '🍫', '🌱',
-      '🌺', '🍏', '🔥', '🌲',
-      '🍀', '🍋', '🍓', '🍍'
-    ];
-
-    for (let i = 0; i < roles.length; i++) {
-      const emoji = roleEmojis[i] || '❓';
-      try {
-        await sentMessage.react(emoji);
-      } catch (err) {
-        console.error('Failed to react:', err);
-      }
-    }
-
-    // Reaction collector to handle role add/remove
-    const filter = (reaction, user) => {
-      return !user.bot && roleEmojis.includes(reaction.emoji.name);
-    };
-
-    const collector = sentMessage.createReactionCollector({ filter, dispose: true });
-
-    collector.on('collect', async (reaction, user) => {
-      try {
-        const emojiIndex = roleEmojis.indexOf(reaction.emoji.name);
-        if (emojiIndex === -1) return;
-
-        const [, roleId] = roles[emojiIndex];
-        const member = await guild.members.fetch(user.id);
-
-        if (!member.roles.cache.has(roleId)) {
-          await member.roles.add(roleId);
-          console.log(`Added role ${roleId} to ${user.tag}`);
-        }
-      } catch (error) {
-        console.error('Error adding role:', error);
-      }
-    });
-
-    collector.on('remove', async (reaction, user) => {
-      try {
-        const emojiIndex = roleEmojis.indexOf(reaction.emoji.name);
-        if (emojiIndex === -1) return;
-
-        const [, roleId] = roles[emojiIndex];
-        const member = await guild.members.fetch(user.id);
-
-        if (member.roles.cache.has(roleId)) {
-          await member.roles.remove(roleId);
-          console.log(`Removed role ${roleId} from ${user.tag}`);
-        }
-      } catch (error) {
-        console.error('Error removing role:', error);
-      }
-    });
-  }
-});
