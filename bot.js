@@ -95,13 +95,13 @@ async function checkSeedsAndPingRoles() {
       inline: false,
     };
 
-    let gearText = '';
-    for (const g of gear) {
-      const name = g.name.toLowerCase();
-      const emoji = gearEmojiMap[name] || '';
-      gearText += `${emoji} ${g.name} x${g.quantity}\n`;
-    }
-
+let gearText = '';
+for (const g of gear) {
+  const emojiName = g.name.toLowerCase().replace(/\s+/g, '_'); // turn "Watering Can" into "watering_can"
+  const emoji = guild.emojis.cache.find(e => e.name.toLowerCase() === emojiName);
+  gearText += `${emoji ? `${emoji} ` : ''}${g.name} x${g.quantity}\n`;
+} 
+    
     const embed = new EmbedBuilder()
       .setTitle('🌱 Grow a Garden Stock')
       .setColor(0x22bb33)
