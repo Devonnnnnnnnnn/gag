@@ -24,18 +24,6 @@ const ITEM_ROLE_IDS = {
 const excludedSeeds = ['carrot', 'blueberry', 'strawberry', 'tomato'];
 const excludedGear = ['watering can', 'recall wrench', 'trowel', 'cleaning spray', 'favorite tool', 'harvest tool'];
 
-const gearEmojiMap = {
-  'cleaning spray': '🧴',
-  trowel: '🛠️',
-  'harvest tool': '🪓',
-  'basic sprinkler': '💧',
-  'recall wrench': '🔧',
-  'favorite tool': '❤️',
-  'watering can': '🪣',
-  'magnifying glass': '🔍',
-  'godly sprinkler': '🌱',
-};
-
 // --- Express Server ---
 const app = express();
 app.get('/', (req, res) => res.send('Bot is alive!'));
@@ -99,13 +87,13 @@ async function checkSeedsAndPingRoles() {
       return `${emoji ? `${emoji} ` : ''}${seed.name} x${seed.quantity}`;
     });
 
-    // Prepare gear list with emoji map fallback
     let gearText = '';
-    for (const g of gear) {
-      const name = g.name.toLowerCase();
-      const emoji = guild.emojis.cache.find(e => e.name.toLowerCase() === name) || gearEmojiMap[name] || '';
-      gearText += `${emoji} ${g.name} x${g.quantity}\n`;
-    }
+for (const g of gear) {
+  const name = g.name.toLowerCase();
+  const emoji = guild.emojis.cache.find(e => e.name.toLowerCase() === name);
+  if (!emoji) continue; // Skip if no custom emoji found
+  gearText += `${emoji} ${g.name} x${g.quantity}\n`;
+}
 
     // Determine which seeds and gear to ping (exclude always present)
     const pingSeeds = seeds.filter(seed => !excludedSeeds.includes(seed.name.toLowerCase()));
