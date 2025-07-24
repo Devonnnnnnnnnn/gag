@@ -119,10 +119,10 @@ async function checkSeedsAndPingRoles() {
 
     // Prepare seed list for embed with emojis
     const seedLines = seeds.map(seed => {
-      const emojiName = seed.name.toLowerCase().replace(/\s+/g, '_');
-      const emoji = guild.emojis.cache.find(e => e.name.toLowerCase() === emojiName);
-      return `${emoji ? `<:${emoji.name}:${emoji.id}> ` : ''}${seed.name} x${seed.quantity}`;
-    });
+  const emojiName = seed.name.toLowerCase().replace(/\s+/g, '_');
+  const emoji = guild.emojis.cache.find(e => e.name.toLowerCase() === emojiName);
+  return `${emoji ? `<:${emoji.name}:${emoji.id}> ` : ''}${seed.name} **x${seed.quantity}**`;
+}); 
 
     // Prepare gear text with emojis
     let gearText = '';
