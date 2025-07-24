@@ -11,12 +11,25 @@ const PREFIX = '!';
 // Map item names (lowercase) to role IDs (replace with your real IDs)
 const ITEM_ROLE_IDS = {
   'orange tulip': '1397255905007112243',
-  'tomato': 'ROLE_ID_TOMATO',
-  'corn': 'ROLE_ID_CORN',
-  'basic sprinkler': 'ROLE_ID_BASIC_SPRINKLER',
-  'godly sprinkler': 'ROLE_ID_GODLY_SPRINKLER',
-  'magnifying glass': 'ROLE_ID_MAGNIFYING_GLASS',
-  // Add your roles here
+  'corn': '1397819643514589295',
+  'daffodil': '1397820120935432314',
+  'watermelon': '1397820277316124744',
+  'pumpkin': '1397820494421688360',
+  'apple': '1397899740271742976',
+  'bamboo': '1397899905124536320',
+  'coconut': '1397900093360963635',
+  'cactus': '1397900426027859978',
+  'dragon fruit': '1397900661319925894',
+  'mango': '1397901168436445306',
+  'grape': '1397901612114247762',
+  'mushroom': '1397901797355421747',
+  'pepper': '1397902096946434058',
+  'cacao': '1397902195898450021',
+  'beanstalk': '1397902504125272155',
+  'ember lily': '1397902752306167809',
+  'sugar apple': '1397903125943291934',
+  'burning bud': '1397902752306167809',
+  'giant pinecone': '1397905644027248742'
 };
 
 // Items always excluded from ping
