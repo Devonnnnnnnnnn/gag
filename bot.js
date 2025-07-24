@@ -1,26 +1,26 @@
 require('dotenv').config();
 const express = require('express');
+const fetch = require('node-fetch'); // add this dependency if not installed
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const { DateTime } = require('luxon');
 
 const TOKEN = process.env.TOKEN;
 const CHANNEL_ID = process.env.CHANNEL_ID;
 const PORT = process.env.PORT || 3000;
+const PREFIX = '!';
 
-// Map item names (lowercase) to their corresponding role IDs (replace with your actual role IDs)
+// Map item names (lowercase) to role IDs (replace with your real IDs)
 const ITEM_ROLE_IDS = {
-  // Seeds (example)
   'orange tulip': '1397255905007112243',
   'tomato': 'ROLE_ID_TOMATO',
   'corn': 'ROLE_ID_CORN',
-  // Gears (example)
   'basic sprinkler': 'ROLE_ID_BASIC_SPRINKLER',
   'godly sprinkler': 'ROLE_ID_GODLY_SPRINKLER',
   'magnifying glass': 'ROLE_ID_MAGNIFYING_GLASS',
-  // Add all relevant items here
+  // Add your roles here
 };
 
-// Items to exclude from ping (always in shop, so no ping)
+// Items always excluded from ping
 const excludedSeeds = ['carrot', 'blueberry', 'strawberry', 'tomato'];
 const excludedGear = ['watering can', 'recall wrench', 'trowel', 'cleaning spray', 'favorite tool', 'harvest tool'];
 
@@ -80,20 +80,20 @@ async function checkSeedsAndPingRoles() {
     const seeds = data.seed?.items || [];
     const gear = data.gear?.items || [];
 
-    // Prepare seed list for embed
+    // Prepare seed list for embed with emojis
     const seedLines = seeds.map(seed => {
       const emojiName = seed.name.toLowerCase().replace(/\s+/g, '_');
       const emoji = guild.emojis.cache.find(e => e.name.toLowerCase() === emojiName);
-      return `${emoji ? `${emoji} ` : ''}${seed.name} x${seed.quantity}`;
+      return `${emoji ? `<:${emoji.name}:${emoji.id}> ` : ''}${seed.name} x${seed.quantity}`;
     });
 
+    // Prepare gear text with emojis
     let gearText = '';
-for (const g of gear) {
-  const name = g.name.toLowerCase();
-  const emoji = guild.emojis.cache.find(e => e.name.toLowerCase() === name);
-  if (!emoji) continue; // Skip if no custom emoji found
-  gearText += `${emoji} ${g.name} x${g.quantity}\n`;
-}
+    for (const g of gear) {
+      const name = g.name.toLowerCase();
+      const emoji = guild.emojis.cache.find(e => e.name.toLowerCase() === name);
+      gearText += `${emoji ? `<:${emoji.name}:${emoji.id}>` : ''} ${g.name} x${g.quantity}\n`;
+    }
 
     // Determine which seeds and gear to ping (exclude always present)
     const pingSeeds = seeds.filter(seed => !excludedSeeds.includes(seed.name.toLowerCase()));
@@ -112,10 +112,8 @@ for (const g of gear) {
       if (roleId) rolesToPingSet.add(roleId);
     }
 
-    const rolesToPing = Array.from(rolesToPingSet);
-
     // Validate roles and check if mentionable
-    const validRoles = rolesToPing
+    const validRoles = Array.from(rolesToPingSet)
       .map(id => guild.roles.cache.get(id))
       .filter(role => role && role.mentionable);
 
@@ -156,4 +154,50 @@ function scheduleSeedCheck() {
     await checkSeedsAndPingRoles();
     scheduleSeedCheck();
   }, waitMs);
+}
+
+// --- !listemojis command ---
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+  if (!message.guild) return;
+
+  if (!message.content.startsWith(PREFIX)) return;
+  const [command] = message.content.trim().split(/\s+/);
+
+  if (command === `${PREFIX}listemojis`) {
+    const emojis = message.guild.emojis.cache;
+
+    if (emojis.size === 0) {
+      return message.channel.send('❌ No custom emojis found in this server.');
+    }
+
+    const emojiLines = emojis.map(emoji => {
+      const formatted = `<${emoji.animated ? 'a' : ''}:${emoji.name}:${emoji.id}>`;
+      const type = emoji.animated ? 'Animated' : 'Static';
+      return `• ${emoji.name} → ${formatted} (ID: \`${emoji.id}\`, ${type})`;
+    });
+
+    // Split into chunks for Discord message limit (1900 chars)
+    const chunks = chunkByCharacterLimit(emojiLines, 1900);
+
+    for (const chunk of chunks) {
+      await message.channel.send(`📙 **Custom Emojis:**\n${chunk}`);
+    }
+  }
+});
+
+// --- Helper to chunk long messages ---
+function chunkByCharacterLimit(lines, maxChars = 1900) {
+  const chunks = [];
+  let currentChunk = '';
+
+  for (const line of lines) {
+    if ((currentChunk + line + '\n').length > maxChars) {
+      chunks.push(currentChunk);
+      currentChunk = '';
+    }
+    currentChunk += line + '\n';
+  }
+  if (currentChunk) chunks.push(currentChunk);
+  return chunks;
 }
