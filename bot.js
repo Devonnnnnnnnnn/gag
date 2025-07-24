@@ -182,13 +182,17 @@ async function checkSeedsAndPingRoles() {
 // --- Seed Check Scheduler ---
 function scheduleSeedCheck() {
   const now = DateTime.now();
-  const nextCheck = now.plus({ minutes: 5 - (now.minute % 5) }).startOf('minute');
+  const nextCheck = now
+    .plus({ minutes: 5 - (now.minute % 5) }) // round up to next 5-minute mark
+    .startOf('minute')
+    .plus({ seconds: 5 }); // add 5 seconds delay
+
   const waitMs = nextCheck.diff(now).as('milliseconds');
 
   console.log(`⏰ Next seed check scheduled for ${nextCheck.toISOTime()} (in ${Math.round(waitMs)} ms)`);
 
   setTimeout(async () => {
     await checkSeedsAndPingRoles();
-    scheduleSeedCheck();
+    scheduleSeedCheck(); // recursively schedule next run
   }, waitMs);
 }
