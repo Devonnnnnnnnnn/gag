@@ -8,7 +8,13 @@ const CHANNEL_ID = process.env.CHANNEL_ID;
 const PORT = process.env.PORT || 3000;
 const PREFIX = '!';
 
-// Map item names (lowercase) to role IDs (replace with your real IDs)
+const adminIDs = [
+  "826494218355605534",
+  "1385377368108961884",
+  "1231292898469740655",
+];
+
+// Map item names (lowercase) to role IDs
 const ITEM_ROLE_IDS = {
   'orange tulip': '1397255905007112243',
   'corn': '1397819643514589295',
@@ -49,6 +55,8 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMessageReactions,
+    GatewayIntentBits.GuildMembers,
   ],
 });
 
@@ -101,12 +109,12 @@ async function checkSeedsAndPingRoles() {
 
     // Prepare gear text with emojis
     let gearText = '';
-for (const g of gear) {
-  const emojiName = g.name.toLowerCase().replace(/\s+/g, '_');
-  const emoji = guild.emojis.cache.find(e => e.name.toLowerCase() === emojiName);
-  gearText += `${emoji ? `<:${emoji.name}:${emoji.id}>` : ''} ${g.name} x${g.quantity}\n`;
-}
-    
+    for (const g of gear) {
+      const emojiName = g.name.toLowerCase().replace(/\s+/g, '_');
+      const emoji = guild.emojis.cache.find(e => e.name.toLowerCase() === emojiName);
+      gearText += `${emoji ? `<:${emoji.name}:${emoji.id}>` : ''} ${g.name} x${g.quantity}\n`;
+    }
+
     // Determine which seeds and gear to ping (exclude always present)
     const pingSeeds = seeds.filter(seed => !excludedSeeds.includes(seed.name.toLowerCase()));
     const pingGear = gear.filter(g => !excludedGear.includes(g.name.toLowerCase()));
@@ -168,7 +176,7 @@ function scheduleSeedCheck() {
   }, waitMs);
 }
 
-// --- !listemojis command ---
+// --- Command Handler ---
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   if (!message.guild) return;
@@ -196,20 +204,177 @@ client.on('messageCreate', async (message) => {
       await message.channel.send(`📙 **Custom Emojis:**\n${chunk}`);
     }
   }
+
+  // Reaction roles command
+  if (command === `${PREFIX}reactionroles`) {
+    if (!adminIDs.includes(message.author.id)) {
+      return message.reply('❌ You do not have permission to use this command.');
+    }
+
+    const guild = message.guild;
+
+    // Build embed
+    const embed = new EmbedBuilder()
+      .setTitle('React to get roles')
+      .setDescription('React to the emojis below to get or remove the corresponding role.')
+      .setColor(0x00AAFF);
+
+    // Add fields with role names
+    for (const [itemName, roleId] of Object.entries(ITEM_ROLE_IDS)) {
+      const role = guild.roles.cache.get(roleId);
+      if (role) {
+        embed.addFields({ name: role.name, value: itemName, inline: true });
+      }
+    }
+
+    const sentMessage = await message.channel.send({ embeds: [embed] });
+
+    // Add reactions: try to use matching custom emojis if available, else fallback to letters
+    // We'll try to get custom emoji matching itemName with underscores
+    for (const itemName of Object.keys(ITEM_ROLE_IDS)) {
+      const emojiName = itemName.toLowerCase().replace(/\s+/g, '_');
+      const emoji = guild.emojis.cache.find(e => e.name.toLowerCase() === emojiName);
+      try {
+        if (emoji) {
+          await sentMessage.react(emoji);
+        } else {
+          // fallback: first letter regional indicator if possible
+          const firstChar = itemName[0].toLowerCase();
+          const regionalIndicator = String.fromCodePoint(firstChar.charCodeAt(0) - 97 + 0x1F1E6);
+          await sentMessage.react(regionalIndicator);
+        }
+      } catch (e) {
+        console.warn(`Failed to react with emoji for ${itemName}:`, e);
+      }
+    }
+
+    // Store message ID and guild ID so you can handle reaction adds/removes later (not implemented here)
+    // You can store these in a database or memory if you want persistent reaction roles.
+  }
 });
 
-// --- Helper to chunk long messages ---
-function chunkByCharacterLimit(lines, maxChars = 1900) {
+// --- Reaction Role Handler ---
+client.on('messageReactionAdd', async (reaction, user) => {
+  if (user.bot) return;
+  if (!reaction.message.guild) return;
+
+  const guild = reaction.message.guild;
+  const member = await guild.members.fetch(user.id).catch(() => null);
+  if (!member) return;
+
+  // Only handle reactions on the reactionroles message (for now, we'll check channel and embed title)
+  if (!reaction.message.embeds.length) return;
+  const embed = reaction.message.embeds[0];
+  if (embed.title !== 'React to get roles') return;
+
+  // Map emoji to role
+  let roleId = null;
+
+  // Try to match custom emoji name or regional indicator to role
+  if (reaction.emoji.id) {
+    // Custom emoji
+    const emojiName = reaction.emoji.name.toLowerCase();
+    // Find matching item name with underscores replaced spaces
+    for (const [itemName, rId] of Object.entries(ITEM_ROLE_IDS)) {
+      if (emojiName === itemName.toLowerCase().replace(/\s+/g, '_')) {
+        roleId = rId;
+        break;
+      }
+    }
+  } else {
+    // Unicode emoji (likely regional indicator)
+    // Try to map regional indicator back to first letter of item name
+    // e.g. 🇦 = a, 🇧 = b etc
+    const codePoint = reaction.emoji.name.codePointAt(0);
+    if (codePoint >= 0x1F1E6 && codePoint <= 0x1F1FF) {
+      const char = String.fromCharCode(codePoint - 0x1F1E6 + 97);
+      // find first item name starting with that char
+      for (const [itemName, rId] of Object.entries(ITEM_ROLE_IDS)) {
+        if (itemName.toLowerCase().startsWith(char)) {
+          roleId = rId;
+          break;
+        }
+      }
+    }
+  }
+
+  if (!roleId) return;
+
+  const role = guild.roles.cache.get(roleId);
+  if (!role) return;
+
+  if (member.roles.cache.has(roleId)) return;
+
+  try {
+    await member.roles.add(role);
+    console.log(`✅ Added role ${role.name} to user ${user.tag}`);
+  } catch (e) {
+    console.error('❌ Failed to add role:', e);
+  }
+});
+
+client.on('messageReactionRemove', async (reaction, user) => {
+  if (user.bot) return;
+  if (!reaction.message.guild) return;
+
+  const guild = reaction.message.guild;
+  const member = await guild.members.fetch(user.id).catch(() => null);
+  if (!member) return;
+
+  if (!reaction.message.embeds.length) return;
+  const embed = reaction.message.embeds[0];
+  if (embed.title !== 'React to get roles') return;
+
+  let roleId = null;
+
+  if (reaction.emoji.id) {
+    const emojiName = reaction.emoji.name.toLowerCase();
+    for (const [itemName, rId] of Object.entries(ITEM_ROLE_IDS)) {
+      if (emojiName === itemName.toLowerCase().replace(/\s+/g, '_')) {
+        roleId = rId;
+        break;
+      }
+    }
+  } else {
+    const codePoint = reaction.emoji.name.codePointAt(0);
+    if (codePoint >= 0x1F1E6 && codePoint <= 0x1F1FF) {
+      const char = String.fromCharCode(codePoint - 0x1F1E6 + 97);
+      for (const [itemName, rId] of Object.entries(ITEM_ROLE_IDS)) {
+        if (itemName.toLowerCase().startsWith(char)) {
+          roleId = rId;
+          break;
+        }
+      }
+    }
+  }
+
+  if (!roleId) return;
+
+  const role = guild.roles.cache.get(roleId);
+  if (!role) return;
+
+  if (!member.roles.cache.has(roleId)) return;
+
+  try {
+    await member.roles.remove(role);
+    console.log(`✅ Removed role ${role.name} from user ${user.tag}`);
+  } catch (e) {
+    console.error('❌ Failed to remove role:', e);
+  }
+});
+
+// --- Utility ---
+function chunkByCharacterLimit(lines, limit) {
   const chunks = [];
-  let currentChunk = '';
+  let chunk = '';
 
   for (const line of lines) {
-    if ((currentChunk + line + '\n').length > maxChars) {
-      chunks.push(currentChunk);
-      currentChunk = '';
+    if ((chunk + line + '\n').length > limit) {
+      chunks.push(chunk);
+      chunk = '';
     }
-    currentChunk += line + '\n';
+    chunk += line + '\n';
   }
-  if (currentChunk) chunks.push(currentChunk);
+  if (chunk) chunks.push(chunk);
   return chunks;
 }
