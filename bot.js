@@ -14,7 +14,7 @@ const adminIDs = [
   "1231292898469740655",
 ];
 
-// Map item names (lowercase) to role IDs
+// Map item names (lowercase) to role IDs (replace with your real IDs)
 const ITEM_ROLE_IDS = {
   'orange tulip': '1397255905007112243',
   'corn': '1397819643514589295',
@@ -35,21 +35,16 @@ const ITEM_ROLE_IDS = {
   'ember lily': '1397902752306167809',
   'sugar apple': '1397903125943291934',
   'burning bud': '1397902752306167809',
-  'giant pinecone': '1397905644027248742'
+  'giant pinecone': '1397905644027248742',
+  'extra1': 'ROLE_ID1',
+  'extra2': 'ROLE_ID2',
+  'extra3': 'ROLE_ID3',
+  'extra4': 'ROLE_ID4',
 };
 
-// Items always excluded from ping
 const excludedSeeds = ['carrot', 'blueberry', 'strawberry', 'tomato'];
 const excludedGear = ['watering can', 'recall wrench', 'trowel', 'cleaning spray', 'favorite tool', 'harvest tool'];
 
-// --- Express Server ---
-const app = express();
-app.get('/', (req, res) => res.send('Bot is alive!'));
-app.listen(PORT, () => {
-  console.log(`🌐 Express server running on port ${PORT}`);
-});
-
-// --- Discord Bot Setup ---
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -58,6 +53,13 @@ const client = new Client({
     GatewayIntentBits.GuildMessageReactions,
     GatewayIntentBits.GuildMembers,
   ],
+});
+
+// --- Express Server ---
+const app = express();
+app.get('/', (req, res) => res.send('Bot is alive!'));
+app.listen(PORT, () => {
+  console.log(`🌐 Express server running on port ${PORT}`);
 });
 
 client.once('ready', () => {
@@ -176,7 +178,110 @@ function scheduleSeedCheck() {
   }, waitMs);
 }
 
-// --- Command Handler ---
+// --- !reactionroles command + reaction role handling ---
+client.on('messageCreate', async message => {
+  if (message.author.bot) return;
+  if (!message.guild) return;
+  if (!message.content.startsWith(PREFIX)) return;
+
+  const [command] = message.content.trim().split(/\s+/);
+
+  if (command === `${PREFIX}reactionroles`) {
+    if (!adminIDs.includes(message.author.id)) {
+      return message.reply('❌ You do not have permission to use this command.');
+    }
+
+    const guild = message.guild;
+    const roles = Object.entries(ITEM_ROLE_IDS);
+
+    // Prepare role names
+    const roleNames = roles.map(([itemName, roleId]) => {
+      const role = guild.roles.cache.get(roleId);
+      return role ? role.name : 'Unknown Role';
+    });
+
+    // Format into 4 columns inside a code block with padding
+    const columns = 4;
+    const padLength = 20;
+    const lines = [];
+    for (let i = 0; i < roleNames.length; i += columns) {
+      const row = roleNames.slice(i, i + columns);
+      const paddedRow = row.map(name => name.padEnd(padLength, ' '));
+      lines.push(paddedRow.join(''));
+    }
+
+    const embed = new EmbedBuilder()
+      .setTitle('🌱 Grow a Garden Reaction Roles')
+      .setDescription('React to this message to get/remove the corresponding role!\n\nReact again to remove the role.')
+      .setColor(0x22bb33)
+      .addFields({ name: 'Roles', value: '```\n' + lines.join('\n') + '\n```' })
+      .setTimestamp();
+
+    const sentMessage = await message.channel.send({ embeds: [embed] });
+
+    // Emojis for each role (adjust emojis to fit your roles)
+    const roleEmojis = [
+      '🌷', '🌽', '💐', '🍉',
+      '🎃', '🍎', '🎍', '🥥',
+      '🌵', '🍈', '🥭', '🍇',
+      '🍄', '🌶️', '🍫', '🌱',
+      '🌺', '🍏', '🔥', '🌲',
+      '🍀', '🍋', '🍓', '🍍'
+    ];
+
+    for (let i = 0; i < roles.length; i++) {
+      const emoji = roleEmojis[i] || '❓';
+      try {
+        await sentMessage.react(emoji);
+      } catch (err) {
+        console.error('Failed to react:', err);
+      }
+    }
+
+    // Reaction collector to handle role add/remove
+    const filter = (reaction, user) => {
+      return !user.bot && roleEmojis.includes(reaction.emoji.name);
+    };
+
+    const collector = sentMessage.createReactionCollector({ filter, dispose: true });
+
+    collector.on('collect', async (reaction, user) => {
+      try {
+        const emojiIndex = roleEmojis.indexOf(reaction.emoji.name);
+        if (emojiIndex === -1) return;
+
+        const [, roleId] = roles[emojiIndex];
+        const member = await guild.members.fetch(user.id);
+
+        if (!member.roles.cache.has(roleId)) {
+          await member.roles.add(roleId);
+          console.log(`Added role ${roleId} to ${user.tag}`);
+        }
+      } catch (error) {
+        console.error('Error adding role:', error);
+      }
+    });
+
+    collector.on('remove', async (reaction, user) => {
+      try {
+        const emojiIndex = roleEmojis.indexOf(reaction.emoji.name);
+        if (emojiIndex === -1) return;
+
+        const [, roleId] = roles[emojiIndex];
+        const member = await guild.members.fetch(user.id);
+
+        if (member.roles.cache.has(roleId)) {
+          await member.roles.remove(roleId);
+          console.log(`Removed role ${roleId} from ${user.tag}`);
+        }
+      } catch (error) {
+        console.error('Error removing role:', error);
+      }
+    });
+  }
+});
+
+// --- !listemojis command from your original code ---
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   if (!message.guild) return;
@@ -204,177 +309,19 @@ client.on('messageCreate', async (message) => {
       await message.channel.send(`📙 **Custom Emojis:**\n${chunk}`);
     }
   }
-
-  // Reaction roles command
-  if (command === `${PREFIX}reactionroles`) {
-    if (!adminIDs.includes(message.author.id)) {
-      return message.reply('❌ You do not have permission to use this command.');
-    }
-
-    const guild = message.guild;
-
-    // Build embed
-    const embed = new EmbedBuilder()
-      .setTitle('React to get roles')
-      .setDescription('React to the emojis below to get or remove the corresponding role.')
-      .setColor(0x00AAFF);
-
-    // Add fields with role names
-    for (const [itemName, roleId] of Object.entries(ITEM_ROLE_IDS)) {
-      const role = guild.roles.cache.get(roleId);
-      if (role) {
-        embed.addFields({ name: role.name, value: itemName, inline: true });
-      }
-    }
-
-    const sentMessage = await message.channel.send({ embeds: [embed] });
-
-    // Add reactions: try to use matching custom emojis if available, else fallback to letters
-    // We'll try to get custom emoji matching itemName with underscores
-    for (const itemName of Object.keys(ITEM_ROLE_IDS)) {
-      const emojiName = itemName.toLowerCase().replace(/\s+/g, '_');
-      const emoji = guild.emojis.cache.find(e => e.name.toLowerCase() === emojiName);
-      try {
-        if (emoji) {
-          await sentMessage.react(emoji);
-        } else {
-          // fallback: first letter regional indicator if possible
-          const firstChar = itemName[0].toLowerCase();
-          const regionalIndicator = String.fromCodePoint(firstChar.charCodeAt(0) - 97 + 0x1F1E6);
-          await sentMessage.react(regionalIndicator);
-        }
-      } catch (e) {
-        console.warn(`Failed to react with emoji for ${itemName}:`, e);
-      }
-    }
-
-    // Store message ID and guild ID so you can handle reaction adds/removes later (not implemented here)
-    // You can store these in a database or memory if you want persistent reaction roles.
-  }
 });
 
-// --- Reaction Role Handler ---
-client.on('messageReactionAdd', async (reaction, user) => {
-  if (user.bot) return;
-  if (!reaction.message.guild) return;
-
-  const guild = reaction.message.guild;
-  const member = await guild.members.fetch(user.id).catch(() => null);
-  if (!member) return;
-
-  // Only handle reactions on the reactionroles message (for now, we'll check channel and embed title)
-  if (!reaction.message.embeds.length) return;
-  const embed = reaction.message.embeds[0];
-  if (embed.title !== 'React to get roles') return;
-
-  // Map emoji to role
-  let roleId = null;
-
-  // Try to match custom emoji name or regional indicator to role
-  if (reaction.emoji.id) {
-    // Custom emoji
-    const emojiName = reaction.emoji.name.toLowerCase();
-    // Find matching item name with underscores replaced spaces
-    for (const [itemName, rId] of Object.entries(ITEM_ROLE_IDS)) {
-      if (emojiName === itemName.toLowerCase().replace(/\s+/g, '_')) {
-        roleId = rId;
-        break;
-      }
-    }
-  } else {
-    // Unicode emoji (likely regional indicator)
-    // Try to map regional indicator back to first letter of item name
-    // e.g. 🇦 = a, 🇧 = b etc
-    const codePoint = reaction.emoji.name.codePointAt(0);
-    if (codePoint >= 0x1F1E6 && codePoint <= 0x1F1FF) {
-      const char = String.fromCharCode(codePoint - 0x1F1E6 + 97);
-      // find first item name starting with that char
-      for (const [itemName, rId] of Object.entries(ITEM_ROLE_IDS)) {
-        if (itemName.toLowerCase().startsWith(char)) {
-          roleId = rId;
-          break;
-        }
-      }
-    }
-  }
-
-  if (!roleId) return;
-
-  const role = guild.roles.cache.get(roleId);
-  if (!role) return;
-
-  if (member.roles.cache.has(roleId)) return;
-
-  try {
-    await member.roles.add(role);
-    console.log(`✅ Added role ${role.name} to user ${user.tag}`);
-  } catch (e) {
-    console.error('❌ Failed to add role:', e);
-  }
-});
-
-client.on('messageReactionRemove', async (reaction, user) => {
-  if (user.bot) return;
-  if (!reaction.message.guild) return;
-
-  const guild = reaction.message.guild;
-  const member = await guild.members.fetch(user.id).catch(() => null);
-  if (!member) return;
-
-  if (!reaction.message.embeds.length) return;
-  const embed = reaction.message.embeds[0];
-  if (embed.title !== 'React to get roles') return;
-
-  let roleId = null;
-
-  if (reaction.emoji.id) {
-    const emojiName = reaction.emoji.name.toLowerCase();
-    for (const [itemName, rId] of Object.entries(ITEM_ROLE_IDS)) {
-      if (emojiName === itemName.toLowerCase().replace(/\s+/g, '_')) {
-        roleId = rId;
-        break;
-      }
-    }
-  } else {
-    const codePoint = reaction.emoji.name.codePointAt(0);
-    if (codePoint >= 0x1F1E6 && codePoint <= 0x1F1FF) {
-      const char = String.fromCharCode(codePoint - 0x1F1E6 + 97);
-      for (const [itemName, rId] of Object.entries(ITEM_ROLE_IDS)) {
-        if (itemName.toLowerCase().startsWith(char)) {
-          roleId = rId;
-          break;
-        }
-      }
-    }
-  }
-
-  if (!roleId) return;
-
-  const role = guild.roles.cache.get(roleId);
-  if (!role) return;
-
-  if (!member.roles.cache.has(roleId)) return;
-
-  try {
-    await member.roles.remove(role);
-    console.log(`✅ Removed role ${role.name} from user ${user.tag}`);
-  } catch (e) {
-    console.error('❌ Failed to remove role:', e);
-  }
-});
-
-// --- Utility ---
-function chunkByCharacterLimit(lines, limit) {
+// Helper to chunk long messages
+function chunkByCharacterLimit(lines, maxChars = 1900) {
   const chunks = [];
-  let chunk = '';
-
+  let currentChunk = '';
   for (const line of lines) {
-    if ((chunk + line + '\n').length > limit) {
-      chunks.push(chunk);
-      chunk = '';
+    if ((currentChunk + line + '\n').length > maxChars) {
+      chunks.push(currentChunk);
+      currentChunk = '';
     }
-    chunk += line + '\n';
+    currentChunk += line + '\n';
   }
-  if (chunk) chunks.push(chunk);
+  if (currentChunk) chunks.push(currentChunk);
   return chunks;
 }
