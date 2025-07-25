@@ -3,6 +3,7 @@ const express = require('express');
 const { Client, GatewayIntentBits, EmbedBuilder, Partials } = require('discord.js');
 const { DateTime } = require('luxon');
 
+// ENV + Constants
 const TOKEN = process.env.TOKEN;
 const CHANNEL_ID = process.env.CHANNEL_ID;
 const PORT = process.env.PORT || 3000;
@@ -14,7 +15,7 @@ const adminIDs = [
   "1231292898469740655",
 ];
 
-// Role mapping
+// Role Mapping
 const ITEM_ROLE_IDS = {
   'orange tulip': '1397255905007112243',
   'corn': '1397819643514589295',
@@ -57,6 +58,7 @@ const ITEM_ROLE_IDS = {
 const excludedSeeds = ['carrot', 'blueberry', 'strawberry', 'tomato'];
 const excludedGear = ['watering can', 'recall wrench', 'trowel', 'cleaning spray', 'favorite tool', 'harvest tool'];
 
+// Discord Client
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -68,13 +70,12 @@ const client = new Client({
   partials: [Partials.Message, Partials.Channel, Partials.Reaction],
 });
 
-// --- Express Server ---
+// Express Server
 const app = express();
 app.get('/', (req, res) => res.send('Bot is alive!'));
-app.listen(PORT, () => {
-  console.log(`🌐 Express server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`🌐 Express server running on port ${PORT}`));
 
+// Login + Startup
 client.once('ready', () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
   scheduleSeedCheck();
@@ -82,7 +83,7 @@ client.once('ready', () => {
 
 client.login(TOKEN);
 
-// --- Fetch Seeds from External API ---
+// Fetch Seeds from API
 async function fetchSeeds() {
   const res = await fetch('https://gagstock.gleeze.com/grow-a-garden');
   if (!res.ok) throw new Error(`Failed to fetch API: ${res.statusText}`);
@@ -90,7 +91,7 @@ async function fetchSeeds() {
   return json.data || {};
 }
 
-// --- Main Logic to Check Seeds + Ping Roles ---
+// Ping Roles Based on Stock
 async function checkSeedsAndPingRoles() {
   try {
     const data = await fetchSeeds();
@@ -98,9 +99,8 @@ async function checkSeedsAndPingRoles() {
     const gear = data.gear?.items || [];
 
     const guild = client.guilds.cache.first();
-    if (!guild) return console.error('❌ No guild found.');
-    const channel = guild.channels.cache.get(CHANNEL_ID);
-    if (!channel || !channel.isTextBased()) return console.error('❌ Channel not found or not text-based.');
+    const channel = guild?.channels.cache.get(CHANNEL_ID);
+    if (!channel || !channel.isTextBased()) return console.error('❌ Channel not found or invalid.');
 
     const seedLines = seeds.map(seed => {
       const emojiName = seed.name.toLowerCase().replace(/\s+/g, '_');
@@ -108,25 +108,25 @@ async function checkSeedsAndPingRoles() {
       return `${emoji ? `<:${emoji.name}:${emoji.id}> ` : ''}${seed.name} **x${seed.quantity}**`;
     });
 
-    let gearText = '';
-    for (const g of gear) {
+    const gearText = gear.map(g => {
       const emojiName = g.name.toLowerCase().replace(/\s+/g, '_');
       const emoji = guild.emojis.cache.find(e => e.name.toLowerCase() === emojiName);
-      gearText += `${emoji ? `<:${emoji.name}:${emoji.id}>` : ''} ${g.name} **x${g.quantity}**\n`;
-    }
+      return `${emoji ? `<:${emoji.name}:${emoji.id}>` : ''} ${g.name} **x${g.quantity}**`;
+    }).join('\n');
 
-    const pingSeeds = seeds.filter(seed => !excludedSeeds.includes(seed.name.toLowerCase()));
-    const pingGear = gear.filter(g => !excludedGear.includes(g.name.toLowerCase()));
+    const rolesToPing = new Set();
 
-    const rolesToPingSet = new Set();
-    [...pingSeeds, ...pingGear].forEach(item => {
-      const roleId = ITEM_ROLE_IDS[item.name.toLowerCase()];
-      if (roleId) rolesToPingSet.add(roleId);
+    [...seeds, ...gear].forEach(item => {
+      const isExcluded = excludedSeeds.includes(item.name.toLowerCase()) || excludedGear.includes(item.name.toLowerCase());
+      if (!isExcluded) {
+        const roleId = ITEM_ROLE_IDS[item.name.toLowerCase()];
+        if (roleId) rolesToPing.add(roleId);
+      }
     });
 
-    const validRoles = Array.from(rolesToPingSet)
+    const validRoles = Array.from(rolesToPing)
       .map(id => guild.roles.cache.get(id))
-      .filter(role => role && role.mentionable);
+      .filter(role => role?.mentionable);
 
     const pingString = validRoles.length ? validRoles.map(role => `<@&${role.id}>`).join(' ') : '';
 
@@ -140,62 +140,68 @@ async function checkSeedsAndPingRoles() {
       .setTimestamp();
 
     await channel.send({ content: pingString || null, embeds: [embed] });
-    console.log(`✅ Sent stock embed${pingString ? ' with role pings' : ''}`);
-  } catch (error) {
-    console.error('❌ Error in checkSeedsAndPingRoles:', error);
+    console.log(`✅ Stock update sent${pingString ? ' with role pings' : ''}`);
+  } catch (err) {
+    console.error('❌ Error in checkSeedsAndPingRoles:', err);
   }
 }
 
-// --- Seed Scheduler ---
+// Schedule Every 5 Minutes
 function scheduleSeedCheck() {
   const now = DateTime.now();
-  const nextCheck = now.plus({ minutes: 5 - (now.minute % 5) }).startOf('minute').plus({ seconds: 10 });
-  const waitMs = nextCheck.diff(now).as('milliseconds');
+  const next = now.plus({ minutes: 5 - (now.minute % 5) }).startOf('minute').plus({ seconds: 10 });
+  const wait = next.diff(now).as('milliseconds');
+  console.log(`⏰ Next check at ${next.toISOTime()}`);
 
-  console.log(`⏰ Next check at ${nextCheck.toISOTime()}`);
   setTimeout(async () => {
     await checkSeedsAndPingRoles();
     scheduleSeedCheck();
-  }, waitMs);
+  }, wait);
 }
 
-// --- Message Command Listener ---
+// Command Handler
 client.on('messageCreate', async message => {
   if (!message.content.startsWith(PREFIX) || message.author.bot) return;
   const [command] = message.content.slice(PREFIX.length).trim().split(/\s+/);
 
-  // Reaction Roles Command
   if (command === 'reactionroles' && adminIDs.includes(message.author.id)) {
-    const guild = message.guild;
-    const roleLines = [];
+    await handleReactionRoles(message);
+  }
+});
 
-    for (const [itemName, roleId] of Object.entries(ITEM_ROLE_IDS)) {
-      const role = guild.roles.cache.get(roleId);
-      const emoji = guild.emojis.cache.find(e => e.name.toLowerCase() === itemName.replace(/\s+/g, '_'));
-      if (!role || !emoji) continue;
+// Handle Reaction Roles Command
+async function handleReactionRoles(message) {
+  const guild = message.guild;
+  const roleLines = [];
 
-      roleLines.push(`${emoji} — <@&${roleId}>`);
-    }
+  for (const [itemName, roleId] of Object.entries(ITEM_ROLE_IDS)) {
+    const role = guild.roles.cache.get(roleId);
+    const emoji = guild.emojis.cache.find(e => e.name.toLowerCase() === itemName.replace(/\s+/g, '_'));
+    if (!role || !emoji) continue;
+    roleLines.push(`${emoji} — <@&${roleId}>`);
+  }
 
-    const sentMsg = await message.channel.send({
-      content: `React to this message to get roles for items:\n\n${roleLines.join('\n')}`,
-    });
+  const sentMsg = await message.channel.send({
+    content: `React to this message to get roles for items:\n\n${roleLines.join('\n')}`,
+  });
 
-    for (const itemName of Object.keys(ITEM_ROLE_IDS)) {
-      const emoji = guild.emojis.cache.find(e => e.name.toLowerCase() === itemName.replace(/\s+/g, '_'));
-      if (emoji) {
-        try {
-          await sentMsg.react(emoji);
-        } catch (e) {
-          console.error(`⚠️ Failed to react with ${emoji.name}:`, e.message);
-        }
+  for (const itemName of Object.keys(ITEM_ROLE_IDS)) {
+    const emoji = guild.emojis.cache.find(e => e.name.toLowerCase() === itemName.replace(/\s+/g, '_'));
+    if (emoji) {
+      try {
+        await sentMsg.react(emoji);
+      } catch (e) {
+        console.error(`⚠️ Could not react with ${emoji.name}:`, e.message);
       }
     }
   }
-});
+}
 
-// --- Reaction Handling ---
-client.on('messageReactionAdd', async (reaction, user) => {
+// Reaction Add / Remove
+client.on('messageReactionAdd', async (reaction, user) => handleReaction(reaction, user, 'add'));
+client.on('messageReactionRemove', async (reaction, user) => handleReaction(reaction, user, 'remove'));
+
+async function handleReaction(reaction, user, action) {
   if (user.bot || !reaction.message.guild) return;
 
   const emojiName = reaction.emoji.name.toLowerCase();
@@ -204,21 +210,10 @@ client.on('messageReactionAdd', async (reaction, user) => {
   if (!roleId) return;
 
   const member = await reaction.message.guild.members.fetch(user.id);
-  if (!member.roles.cache.has(roleId)) {
+  if (action === 'add' && !member.roles.cache.has(roleId)) {
     await member.roles.add(roleId).catch(console.error);
   }
-});
-
-client.on('messageReactionRemove', async (reaction, user) => {
-  if (user.bot || !reaction.message.guild) return;
-
-  const emojiName = reaction.emoji.name.toLowerCase();
-  const itemName = Object.keys(ITEM_ROLE_IDS).find(name => name.replace(/\s+/g, '_') === emojiName);
-  const roleId = ITEM_ROLE_IDS[itemName];
-  if (!roleId) return;
-
-  const member = await reaction.message.guild.members.fetch(user.id);
-  if (member.roles.cache.has(roleId)) {
+  if (action === 'remove' && member.roles.cache.has(roleId)) {
     await member.roles.remove(roleId).catch(console.error);
   }
-});
+}
