@@ -181,17 +181,37 @@ async function handleReactionRoles(message) {
     roleLines.push(`${emoji} — <@&${roleId}>`);
   }
 
-  const sentMsg = await message.channel.send({
-    content: `React to this message to get roles for items:\n\n${roleLines.join('\n')}`,
-  });
+  const header = "React to this message to get roles for items:\n\n";
+  const maxChunkSize = 2000;
 
-  for (const itemName of Object.keys(ITEM_ROLE_IDS)) {
-    const emoji = guild.emojis.cache.find(e => e.name.toLowerCase() === itemName.replace(/\s+/g, '_'));
-    if (emoji) {
-      try {
-        await sentMsg.react(emoji);
-      } catch (e) {
-        console.error(`⚠️ Could not react with ${emoji.name}:`, e.message);
+  let currentMessage = header;
+  let sentMessages = [];
+
+  for (const line of roleLines) {
+    if ((currentMessage + line + '\n').length > maxChunkSize) {
+      const sent = await message.channel.send(currentMessage);
+      sentMessages.push(sent);
+      currentMessage = line + '\n';
+    } else {
+      currentMessage += line + '\n';
+    }
+  }
+
+  if (currentMessage.length > 0) {
+    const sent = await message.channel.send(currentMessage);
+    sentMessages.push(sent);
+  }
+
+  // React to all messages with emojis
+  for (const sentMsg of sentMessages) {
+    for (const itemName of Object.keys(ITEM_ROLE_IDS)) {
+      const emoji = guild.emojis.cache.find(e => e.name.toLowerCase() === itemName.replace(/\s+/g, '_'));
+      if (emoji) {
+        try {
+          await sentMsg.react(emoji);
+        } catch (e) {
+          console.error(`⚠️ Could not react with ${emoji.name}:`, e.message);
+        }
       }
     }
   }
