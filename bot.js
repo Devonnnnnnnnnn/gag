@@ -34,12 +34,9 @@ const ITEM_ROLE_IDS = {
   'cacao': '1397902195898450021',
   'beanstalk': '1397902504125272155',
   'ember lily': '1397902752306167809',
+  'burning bud': '1397903578324144200', // ✅ fixed
   'sugar apple': '1397903125943291934',
-  'burning bud': '1397902752306167809',
   'giant pinecone': '1397905644027248742',
-  'watering can': '1397913821846175864',
-  'trowel': '1397914064306442320',
-  'recall wrench': '1397914193474359306',
   'basic sprinkler': '1397914304728273049',
   'advanced sprinkler': '1397914427873034382',
   'medium toy': '1397914725999841392',
@@ -48,9 +45,6 @@ const ITEM_ROLE_IDS = {
   'magnifying glass': '1397915215827308574',
   'tanning mirror': '1397915712760057906',
   'master sprinkler': '1397915857769730058',
-  'cleaning spray': '1397915979522117713',
-  'favorite tool': '1397916270493569124',
-  'harvest tool': '1397916329583050783',
   'friendship pot': '1397916575524192358',
   'level up lollipop': '1397916660870156328',
 };
