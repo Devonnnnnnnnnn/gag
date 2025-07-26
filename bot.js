@@ -169,49 +169,41 @@ client.on('messageCreate', async message => {
   }
 });
 
-// Handle Reaction Roles Command
+const BATCH_SIZE = 20;
+
 async function handleReactionRoles(message) {
   const guild = message.guild;
-  const roleLines = [];
 
-  for (const [itemName, roleId] of Object.entries(ITEM_ROLE_IDS)) {
+  // Step 1: Collect valid emoji-role pairs
+  const entries = Object.entries(ITEM_ROLE_IDS).map(([itemName, roleId]) => {
     const role = guild.roles.cache.get(roleId);
     const emoji = guild.emojis.cache.find(e => e.name.toLowerCase() === itemName.replace(/\s+/g, '_'));
-    if (!role || !emoji) continue;
-    roleLines.push(`${emoji} — <@&${roleId}>`);
-  }
 
-  const header = "React to this message to get roles for items:\n\n";
-  const maxChunkSize = 2000;
-
-  let currentMessage = header;
-  let sentMessages = [];
-
-  for (const line of roleLines) {
-    if ((currentMessage + line + '\n').length > maxChunkSize) {
-      const sent = await message.channel.send(currentMessage);
-      sentMessages.push(sent);
-      currentMessage = line + '\n';
-    } else {
-      currentMessage += line + '\n';
+    if (!role || !emoji) {
+      console.warn(`⚠️ Skipped: ${itemName} (Missing role or emoji)`);
+      return null;
     }
+
+    return { itemName, role, emoji };
+  }).filter(Boolean);
+
+  if (entries.length === 0) {
+    await message.channel.send("⚠️ No valid roles or emojis found.");
+    return;
   }
 
-  if (currentMessage.length > 0) {
-    const sent = await message.channel.send(currentMessage);
-    sentMessages.push(sent);
-  }
+  // Step 2: Send in batches of 20
+  for (let i = 0; i < entries.length; i += BATCH_SIZE) {
+    const batch = entries.slice(i, i + BATCH_SIZE);
 
-  // React to all messages with emojis
-  for (const sentMsg of sentMessages) {
-    for (const itemName of Object.keys(ITEM_ROLE_IDS)) {
-      const emoji = guild.emojis.cache.find(e => e.name.toLowerCase() === itemName.replace(/\s+/g, '_'));
-      if (emoji) {
-        try {
-          await sentMsg.react(emoji);
-        } catch (e) {
-          console.error(`⚠️ Could not react with ${emoji.name}:`, e.message);
-        }
+    const content = `React to get the following roles:\n\n${batch.map(entry => `${entry.emoji} — <@&${entry.role.id}>`).join('\n')}`;
+    const sentMessage = await message.channel.send({ content });
+
+    for (const { emoji } of batch) {
+      try {
+        await sentMessage.react(emoji);
+      } catch (err) {
+        console.error(`⚠️ Failed to react with ${emoji.name}: ${err.message}`);
       }
     }
   }
